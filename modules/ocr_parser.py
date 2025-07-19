@@ -60,33 +60,41 @@ class CardOCR:
             image.save(f'debug_images/{name}.png')
 
     def preprocess_image(self, image):
-        """Enhanced image preprocessing"""
         if isinstance(image, Image.Image):
             image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         
-        # Save original capture
+        # Save original for debugging
         self.save_debug_image(image, 'original_capture')
         
+        # Enhanced preprocessing
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Apply multiple preprocessing techniques
-        # 1. Increase contrast
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        gray = clahe.apply(gray)
+        # Apply adaptive histogram equalization
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(gray)
         
-        # 2. Denoise
-        denoised = cv2.fastNlMeansDenoising(gray)
+        # Denoise
+        denoised = cv2.fastNlMeansDenoising(enhanced)
         
-        # 3. Threshold
-        _, thresh = cv2.threshold(denoised, 127, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # Sharpen
+        kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+        sharpened = cv2.filter2D(denoised, -1, kernel)
         
-        # 4. Scale up
-        scaled = cv2.resize(thresh, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        # Adaptive thresholding
+        binary = cv2.adaptiveThreshold(
+            sharpened,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11,
+            2
+        )
         
-        # Save preprocessed image
+        # Scale up
+        scaled = cv2.resize(binary, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        
         self.save_debug_image(scaled, 'preprocessed')
-        
         return scaled
 
     def split_image(self, image):
@@ -148,6 +156,9 @@ class CardOCR:
                 print(f"Original image shape: {image.shape}")
                 print(f"Image dtype: {image.dtype}")
                 
+            # Initialize template detector
+            detector = CardTemplateDetector()
+            
             # Preprocess and get dimensions at each step
             processed_img = self.preprocess_image(image)
             print(f"Processed image shape: {processed_img.shape}")
@@ -155,17 +166,30 @@ class CardOCR:
             left_card_img, right_card_img = self.split_image(processed_img)
             print(f"Left card shape: {left_card_img.shape}")
             print(f"Right card shape: {right_card_img.shape}")
-                        
+            
+            # Use template matching for detection
+            left_card = detector.detect_card(left_card_img)
+            right_card = detector.detect_card(right_card_img)
+            
+            print(f"Left card detection: {left_card}")
+            print(f"Right card detection: {right_card}")
+            
             # Validate we have both cards
-            if left_card_img and right_card_img and left_card_img != right_card_img:
-                cards = (left_card_img, right_card_img)
-                print(f"Successfully detected cards: {cards}")
-                return cards
-            else:
-                print("Failed to detect valid cards or cards are identical")
-                print(f"Left card: {left_card_img}, Right card: {right_card_img}")
-                return None
+            if left_card and right_card:
+                # Sort values to maintain consistent ordering (higher card first)
+                cards = sorted([left_card, right_card], 
+                            key=lambda x: detector.values.index(x[0]), 
+                            reverse=True)
                 
+                # Format the hand in standard poker notation (e.g., "AKs" or "AKo")
+                suited = cards[0][1] == cards[1][1]
+                hand = f"{cards[0][0]}{cards[1][0]}{'s' if suited else 'o'}"
+                print(f"Detected hand: {hand}")
+                return hand
+            else:
+                print("Failed to detect valid cards")
+                return None
+                    
         except Exception as e:
             print(f"Error parsing hand: {e}")
             import traceback
@@ -178,3 +202,60 @@ card_ocr = CardOCR()
 # Export the parse_hand function at module level
 def parse_hand(image):
     return card_ocr.parse_hand(image)
+
+
+
+class CardTemplateDetector:
+    def __init__(self):
+        self.value_templates = {}
+        self.suit_templates = {}
+        self.values = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
+        self.suits = ['s', 'h', 'd', 'c']  # spades, hearts, diamonds, clubs
+        
+        # Load templates
+        self._load_templates()
+    
+    def _load_templates(self):
+        # Load value templates
+        for value in self.values:
+            template_path = f"card_templates/values/{value}.png"
+            if os.path.exists(template_path):
+                self.value_templates[value] = cv2.imread(template_path, 0)
+        
+        # Load suit templates
+        for suit in self.suits:
+            template_path = f"card_templates/suits/{suit}.png"
+            if os.path.exists(template_path):
+                self.suit_templates[suit] = cv2.imread(template_path, 0)
+    
+    def detect_card(self, card_img):
+        # Convert to grayscale if needed
+        if len(card_img.shape) == 3:
+            card_img = cv2.cvtColor(card_img, cv2.COLOR_BGR2GRAY)
+        
+        best_value_match = None
+        best_value_score = -1
+        best_suit_match = None
+        best_suit_score = -1
+        
+        # Detect value
+        for value, template in self.value_templates.items():
+            result = cv2.matchTemplate(card_img, template, cv2.TM_CCOEFF_NORMED)
+            score = np.max(result)
+            if score > best_value_score:
+                best_value_score = score
+                best_value_match = value
+        
+        # Detect suit
+        for suit, template in self.suit_templates.items():
+            result = cv2.matchTemplate(card_img, template, cv2.TM_CCOEFF_NORMED)
+            score = np.max(result)
+            if score > best_suit_score:
+                best_suit_score = score
+                best_suit_match = suit
+        
+        # Return None if confidence is too low
+        if best_value_score < 0.7 or best_suit_score < 0.7:
+            return None
+            
+        return (best_value_match, best_suit_match)
