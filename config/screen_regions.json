@@ -1,5 +1,13 @@
 {
-  "hole_cards": {
-    "x": 100, "y": 600, "width": 150, "height": 50
+  "tables": {
+    "table1": {
+      "hole_cards": {
+        "x": 453,
+        "y": 443,
+        "width": 115,
+        "height": 74
+      },
+      "active": true
+    }
   }
 }
