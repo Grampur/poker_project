@@ -1,0 +1,6 @@
+pytesseract
+pillow
+pyautogui
+keyboard
+tkinter
+easyocr
