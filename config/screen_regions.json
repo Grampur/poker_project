@@ -2,10 +2,10 @@
   "tables": {
     "table1": {
       "hole_cards": {
-        "x": 811,
-        "y": 620,
-        "width": 147,
-        "height": 103
+        "x": 819,
+        "y": 625,
+        "width": 134,
+        "height": 89
       },
       "active": true
     }
