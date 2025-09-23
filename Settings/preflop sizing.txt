@@ -1,0 +1,9 @@
+6-max Cash 100bb Openraise BU-2.25, CO-2.5, SB,MP,EP-3, 3bet x3
+
+Tournament 3-max Openraise BU-2, SB&BU-2, SB-3(22-25),2.5(16-21),2(9-15)  
+ 
+Tournament 9-max Openraise 3, BU-2.5, 3bet x3 
+
+9-max Cash 100bb Openraise SB-3, BU-2.5, CO-2.3, HJ,MP2,MP1,UTG2,UTG1-2
+
+8,9-max Straddle Cash 200bb Openraise BB-10.6 SB-11, BU,CO,MP2,MP1,EP2,EP1-7
