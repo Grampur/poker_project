@@ -5,11 +5,12 @@ Creates a 13x13 grid representing all possible starting hands.
 
 import tkinter as tk
 from tkinter import ttk
-from utils.poker_utils import get_hand_matrix_position, frequency_to_color
+from data.range_parser import RangeParser
 
 class RangeGrid:
     def __init__(self, parent):
         self.parent = parent
+        self.range_parser = RangeParser()  # Use RangeParser for utility methods
         self.setup_grid()
         
     def setup_grid(self):
@@ -76,12 +77,12 @@ class RangeGrid:
             else:
                 hand_part = hand_string
                 
-            # Find grid position for this hand
-            position = get_hand_matrix_position(hand_part)
+            # Find grid position for this hand using RangeParser method
+            position = self.range_parser.get_hand_matrix_position(hand_part)
             if position:
                 row, col = position
                 if (row, col) in self.buttons:
-                    color = frequency_to_color(frequency)
+                    color = self.range_parser.frequency_to_color(frequency)
                     self.buttons[(row, col)].config(
                         bg=color,
                         activebackground=color,
