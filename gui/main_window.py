@@ -22,6 +22,7 @@ class MainWindow:
         
         # Current solution data
         self.current_solution = None
+        self.available_data = {}
         
         # Predefined positions and actions for preflop scenarios
         self.positions = ['UTG', 'MP', 'CO', 'BU', 'SB', 'BB']
@@ -226,9 +227,136 @@ class MainWindow:
         """Handle position selection change."""
         self.update_facing_options()
         
+    def on_facing_change(self, event=None):
+        """Handle facing action selection change."""
+        # Auto-load range when facing action is selected
+        self.load_selected_range()
+        
     def update_facing_options(self):
         """Update facing action options based on position."""
         position = self.position_var.get()
         if not position:
             return
             
+        # Simple facing options based on position
+        if position == "UTG":
+            facing_options = ["First to Act", "vs Raise", "vs 3-Bet"]
+        elif position == "SB":
+            facing_options = ["vs BB", "vs Raise", "vs 3-Bet"]
+        elif position == "BB":
+            facing_options = ["vs SB", "vs Raise", "vs 3-Bet"] 
+        else:
+            facing_options = ["First to Act", "vs Raise", "vs 3-Bet", "vs 4-Bet"]
+            
+        self.facing_combo['values'] = facing_options
+        if facing_options:
+            self.facing_combo.set(facing_options[0])
+            
+    def load_selected_range(self):
+        """Load and display the selected range."""
+        try:
+            position = self.position_var.get()
+            facing = self.facing_var.get()
+            stack = self.stack_var.get()
+            
+            if not all([position, facing, stack]):
+                self.status_var.set("Please select position, facing action, and stack size")
+                return
+                
+            # Try to find a matching solution file
+            scenario_name = f"{position} vs {facing}" if facing != "First to Act" else position
+            
+            # Load solution data (simplified - you'll need to adapt this to your file structure)
+            solution_data = self.load_solution_for_scenario(stack, scenario_name)
+            
+            if solution_data:
+                # Parse and display the range
+                range_data = self.range_parser.parse_range_line(solution_data.get('range_line', ''))
+                
+                if range_data:
+                    self.display_range(range_data)
+                    self.update_statistics(range_data)
+                    self.status_var.set(f"Loaded range for {position} facing {facing} ({stack}BB)")
+                else:
+                    self.status_var.set("No range data found for this scenario")
+            else:
+                self.status_var.set(f"No solution found for {position} vs {facing} at {stack}BB")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load range: {str(e)}")
+            
+    def load_solution_for_scenario(self, stack, scenario):
+        """Load solution data for a specific scenario (simplified version)."""
+        # This is a simplified version - you'll need to adapt this to your actual file structure
+        folder_path = self.folder_var.get()
+        
+        # Try to find files that match the scenario
+        stack_folder = os.path.join(folder_path, stack)
+        if os.path.exists(stack_folder):
+            for filename in os.listdir(stack_folder):
+                if scenario.replace(" ", "").lower() in filename.replace(" ", "").lower():
+                    file_path = os.path.join(stack_folder, filename)
+                    try:
+                        return self.solution_loader.load_solution_file(file_path)
+                    except:
+                        continue
+                        
+        return None
+        
+    def display_range(self, range_data):
+        """Display range data on the grid."""
+        action_filter = self.action_var.get()
+        
+        if action_filter == "All":
+            filtered_data = range_data
+        else:
+            # Filter based on action type (simplified)
+            filtered_data = {}
+            for hand, frequency in range_data.items():
+                if action_filter == "Raise" and frequency > 0.7:
+                    filtered_data[hand] = frequency
+                elif action_filter == "Call" and 0.3 < frequency <= 0.7:
+                    filtered_data[hand] = frequency
+                elif action_filter == "Fold" and frequency <= 0.3:
+                    filtered_data[hand] = frequency
+                    
+        self.range_grid.update_range(filtered_data)
+        
+    def update_statistics(self, range_data):
+        """Update the statistics display."""
+        stats = self.range_parser.calculate_range_statistics(range_data)
+        
+        stats_text = f"""Range Statistics:
+
+VPIP: {stats['vpip']:.1f}%
+Total Combos: {stats['total_combos']}
+Played Combos: {stats['played_combos']}
+
+Hand Types:
+Pairs: {stats['pairs']:.1f}%
+Suited: {stats['suited']:.1f}%
+Offsuit: {stats['offsuit']:.1f}%
+
+Strength:
+Premium: {stats['premium']:.1f}%
+Strong: {stats['strong']:.1f}%
+Marginal: {stats['marginal']:.1f}%
+"""
+        
+        self.stats_text.config(state='normal')
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.insert(1.0, stats_text)
+        self.stats_text.config(state='disabled')
+        
+    def update_range_display(self):
+        """Update the range display based on action filter."""
+        if hasattr(self, 'current_range_data') and self.current_range_data:
+            self.display_range(self.current_range_data)
+            
+    def clear_display(self):
+        """Clear the range display."""
+        self.range_grid.clear()
+        self.stats_text.config(state='normal')
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.config(state='disabled')
+        self.status_var.set("Display cleared")
